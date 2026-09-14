@@ -3,12 +3,54 @@
 namespace App\Http\Controllers;
 
 use App\Models\Task;
+use App\Models\TaskComment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TaskCommentController extends Controller
 {
     private const ALLOWED_RICH_TEXT_TAGS = '<p><br><b><strong><i><em><u><ul><ol><li><a><span><h1><h2><h3><blockquote>';
+
+    public function exportCsv(): StreamedResponse
+    {
+        $comments = TaskComment::with(['author', 'task', 'images'])
+            ->orderBy('task_id')
+            ->orderBy('created_at')
+            ->get();
+
+        $filename = 'apparel-soft-track-updates-'.now()->format('Y-m-d').'.csv';
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ];
+
+        return response()->streamDownload(function () use ($comments) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Task ID', 'Style Title', 'Buyer', 'Style No', 'Type', 'Written By', 'Date', 'Message', 'Photos']);
+
+            foreach ($comments as $comment) {
+                $plain = html_entity_decode(strip_tags(
+                    (string) preg_replace('/<\/(p|div|li|h[1-6]|blockquote)>/i', ' ', (string) $comment->text)
+                ), ENT_QUOTES | ENT_HTML5);
+
+                fputcsv($out, [
+                    $comment->task_id,
+                    $comment->task?->title,
+                    $comment->task?->buyer,
+                    $comment->task?->style,
+                    TaskComment::TYPES[$comment->type] ?? ucfirst(str_replace('_', ' ', $comment->type)),
+                    $comment->author?->name,
+                    $comment->created_at?->format('Y-m-d H:i'),
+                    trim((string) preg_replace('/\s+/', ' ', $plain)),
+                    $comment->images->count(),
+                ]);
+            }
+
+            fclose($out);
+        }, $filename, $headers);
+    }
 
     public function index(Task $task)
     {

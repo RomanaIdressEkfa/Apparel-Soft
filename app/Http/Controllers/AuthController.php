@@ -27,6 +27,16 @@ class AuthController extends Controller
         ]);
 
         if (Auth::attempt($credentials, true)) {
+            if (! $request->user()->is_approved) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return back()
+                    ->withErrors(['email' => 'Your account is waiting for admin approval. You will be able to log in once an admin approves it.'])
+                    ->onlyInput('email');
+            }
+
             $request->session()->regenerate();
 
             return redirect()->intended(route('dashboard'));
@@ -66,16 +76,18 @@ class AuthController extends Controller
             return back()->withErrors($validator)->withInput($request->except('password', 'password_confirmation'));
         }
 
-        $user = User::create([
+        User::create([
             'name' => $request->string('name'),
             'email' => $request->string('email'),
             'password' => Hash::make($request->string('password')),
+            'is_approved' => false,
+            'role' => 'member',
         ]);
 
-        Auth::login($user);
-        $request->session()->regenerate();
-
-        return redirect()->route('dashboard');
+        return redirect()->route('login')->with(
+            'status',
+            'Account created. An admin has to approve it before you can log in — please check back shortly.'
+        );
     }
 
     public function logout(Request $request)
