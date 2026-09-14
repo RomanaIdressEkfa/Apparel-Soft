@@ -1,15 +1,19 @@
 ---
 # Runs on cPanel when you press "Deploy HEAD Commit" in Git Version Control.
-# The repository itself lives at /home/<user>/apparel-soft and the subdomain's
-# document root points at /home/<user>/apparel-soft/public, so nothing needs
-# copying — we only refresh dependencies, schema and caches.
+#
+# The repository itself is the application: clone it to the folder that sits one
+# level above the subdomain's document root, e.g. document root
+# "apparel/public" means the repository path is "/home/<user>/apparel".
+# Nothing is copied here — these tasks only refresh dependencies, schema and
+# caches, so they work whatever the folder is called.
 deployment:
   tasks:
-    - export APPDIR=/home/endobmuc/apparel-soft
-    - cd $APPDIR
-    - /opt/cpanel/ea-php83/root/usr/bin/php composer.phar install --no-dev --optimize-autoloader --no-interaction || composer install --no-dev --optimize-autoloader --no-interaction
-    - /opt/cpanel/ea-php83/root/usr/bin/php artisan migrate --force
-    - /opt/cpanel/ea-php83/root/usr/bin/php artisan config:cache
-    - /opt/cpanel/ea-php83/root/usr/bin/php artisan route:cache
-    - /opt/cpanel/ea-php83/root/usr/bin/php artisan view:cache
-    - /bin/chmod -R 775 $APPDIR/storage $APPDIR/bootstrap/cache
+    - export PHP=$(command -v /opt/cpanel/ea-php83/root/usr/bin/php || command -v php)
+    - $PHP -v
+    - if [ -f composer.phar ]; then $PHP composer.phar install --no-dev --optimize-autoloader --no-interaction; else composer install --no-dev --optimize-autoloader --no-interaction; fi
+    - $PHP artisan migrate --force
+    - $PHP artisan storage:link || true
+    - $PHP artisan config:cache
+    - $PHP artisan route:cache
+    - $PHP artisan view:cache
+    - chmod -R 775 storage bootstrap/cache
